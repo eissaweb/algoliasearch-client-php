@@ -1,0 +1,131 @@
+aliases:
+  - &check_composer
+    name: Which composer?
+    command: composer -v
+
+  - &restore_cache
+    name: Restore composer cache
+    keys:
+      - composer-v1-<< parameters.version >>-{{ checksum "composer.lock" }}
+      - composer-v1-<< parameters.version >>-
+
+  - &install_composer
+    name: Composer Install
+    command: composer install -n --prefer-dist
+
+  - &install_guzzle_6
+    name: Install Guzzle 6
+    command: composer require guzzlehttp/guzzle:^6.5
+
+  - &install_guzzle_7
+    name: Install Guzzle 7
+    command: composer require guzzlehttp/guzzle:~7
+
+  - &save_cache
+    name: Save Bundler cache
+    key: composer-v1-<< parameters.version >>-{{ checksum "composer.lock" }}
+    paths:
+      - vendor
+
+  - &run_lint
+    name: Run linting tool
+    command: vendor/bin/php-cs-fixer fix -v --dry-run
+
+  - &run_tests
+    name: Run unit and integration tests
+    command: |
+      vendor/bin/phpunit
+
+version: 2.1
+
+jobs:
+  format:
+    description: Run our linter checks against the entire code base
+    parameters:
+      version:
+        type: string
+    docker:
+      - image: circleci/php:<< parameters.version >>
+    steps:
+      - checkout
+      - run: *check_composer
+      - run: *install_composer
+      - run: *run_lint
+
+  test_php:
+    description: Build, unit and integration tests for PHP
+    parameters:
+      version:
+        type: string
+    docker:
+      - image: circleci/php:<< parameters.version >>
+    steps:
+      - checkout
+      - run: *check_composer
+      - restore_cache: *restore_cache
+      - run: *install_composer
+      - save_cache: *save_cache
+      - run: *run_tests
+
+  test_guzzle_6:
+    description: Build, unit and integration tests for PHP & Guzzle 6
+    parameters:
+      version:
+        type: string
+    docker:
+      - image: circleci/php:<< parameters.version >>
+    steps:
+      - checkout
+      - run: *check_composer
+      - restore_cache: *restore_cache
+      - run: *install_composer
+      - run: *install_guzzle_6
+      - save_cache: *save_cache
+      - run: *run_tests
+
+  test_guzzle_7:
+    description: Build, unit and integration tests for PHP & Guzzle 7
+    parameters:
+      version:
+        type: string
+    docker:
+      - image: circleci/php:<< parameters.version >>
+    steps:
+      - checkout
+      - run: *check_composer
+      - restore_cache: *restore_cache
+      - run: *install_composer
+      - run: *install_guzzle_7
+      - save_cache: *save_cache
+      - run: *run_tests
+
+workflows:
+  version: 2
+  ci:
+    jobs:
+      - format:
+          version: '2.7'
+          filters:
+            tags:
+              only: /.*/
+      - test_curl:
+          matrix:
+            parameters:
+              version: ['5.6', '7.2', '7.3', '7.4']
+          filters:
+            tags:
+              only: /.*/
+      - test_guzzle_6:
+      matrix:
+        parameters:
+          version: ['5.6', '7.2', '7.3', '7.4']
+      filters:
+        tags:
+          only: /.*/
+      - test_guzzle_7:
+      matrix:
+        parameters:
+          version: ['7.2', '7.3', '7.4']
+      filters:
+        tags:
+          only: /.*/
